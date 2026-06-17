@@ -120,23 +120,28 @@ export function ThoughtStream({
         <label className="sr-only" htmlFor="bubble-draft">
           Capture a thought
         </label>
-        <textarea
-          className="composer-input"
-          id="bubble-draft"
-          placeholder="Save a thought..."
-          rows={2}
-          value={draft}
-          onChange={(event) => onDraftChange(event.target.value)}
-          onKeyDown={handleKeyDown}
-        />
-        <button
-          className="primary-button"
-          aria-label="Save thought"
-          disabled={draft.trim().length === 0}
-          type="submit"
-        >
-          Save
-        </button>
+        <div className="composer-box">
+          <textarea
+            className="composer-input"
+            id="bubble-draft"
+            placeholder="Save a thought..."
+            rows={2}
+            value={draft}
+            onChange={(event) => onDraftChange(event.target.value)}
+            onKeyDown={handleKeyDown}
+          />
+          <div className="composer-actions">
+            <span className="composer-state">Local</span>
+            <button
+              className="primary-button composer-submit"
+              aria-label="Save thought"
+              disabled={draft.trim().length === 0}
+              type="submit"
+            >
+              Save
+            </button>
+          </div>
+        </div>
       </form>
     </section>
   );

@@ -206,16 +206,34 @@ textarea:focus-visible {
 }
 
 .composer {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 0.75rem;
   background: color-mix(in oklch, var(--bg), var(--surface) 35%);
+}
+
+.composer-box {
+  display: flex;
+  min-height: 6.25rem;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg);
+  transition:
+    border-color 180ms ease,
+    box-shadow 180ms ease,
+    background 180ms ease;
+}
+
+.composer-box:hover {
+  border-color: color-mix(in oklch, var(--primary), var(--line) 58%);
+}
+
+.composer-box:focus-within {
+  border-color: color-mix(in oklch, var(--primary), var(--line) 35%);
+  box-shadow: 0 0 0 3px color-mix(in oklch, var(--primary-soft), transparent 42%);
 }
 
 .composer-input,
 .ask-input {
   width: 100%;
-  resize: vertical;
   border: 1px solid var(--line);
   border-radius: 5px;
   background: var(--bg);
@@ -228,14 +246,25 @@ textarea:focus-visible {
 }
 
 .composer-input {
-  min-height: 3.25rem;
-  max-height: 10rem;
-  padding: 0.78rem 0.9rem;
+  min-height: 3.85rem;
+  max-height: 9rem;
+  flex: 1;
+  resize: none;
+  border: 0;
+  border-radius: 9px 9px 0 0;
+  padding: 0.95rem 1rem 0.55rem;
+  overflow-y: auto;
+  font-size: 1rem;
+}
+
+.composer-input:focus {
+  outline: 0;
 }
 
 .ask-input {
   min-height: 7.25rem;
   padding: 0.85rem 0.9rem;
+  resize: vertical;
 }
 
 .composer-input::placeholder,
@@ -251,9 +280,32 @@ textarea:focus-visible {
   border-color: color-mix(in oklch, var(--primary), var(--line) 45%);
 }
 
-.composer-input:focus,
 .ask-input:focus {
   box-shadow: 0 0 0 3px color-mix(in oklch, var(--primary-soft), transparent 38%);
+}
+
+.composer-actions {
+  display: flex;
+  min-height: 3.1rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border-top: 1px solid color-mix(in oklch, var(--line), transparent 42%);
+  padding: 0.45rem 0.5rem 0.5rem 0.85rem;
+}
+
+.composer-state {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 650;
+}
+
+.composer-submit {
+  min-height: 2.75rem;
+  min-width: 4.25rem;
+  border-radius: 7px;
+  padding: 0.4rem 0.8rem;
+  font-size: 0.86rem;
 }
 
 .primary-button,
@@ -395,12 +447,11 @@ textarea:focus-visible {
 
 @media (max-width: 640px) {
   .composer {
-    grid-template-columns: 1fr;
     padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
   }
 
-  .composer .primary-button {
-    width: 100%;
+  .composer-box {
+    min-height: 6rem;
   }
 
   .bubble {
