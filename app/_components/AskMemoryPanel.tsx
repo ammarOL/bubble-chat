@@ -37,7 +37,7 @@ export function AskMemoryPanel({
         </h2>
         <p className="mt-1 text-sm leading-6 text-[var(--muted)]">
           Bubbles retrieves local notes, then sends only the selected context to
-          Google.
+          your selected provider.
         </p>
       </div>
 
@@ -108,8 +108,8 @@ export function AskMemoryPanel({
 
         <div className="privacy-note">
           <p className="text-sm leading-6 text-[var(--muted-strong)]">
-            Capture stays local. Ask Memory uses Gemini only after it chooses
-            relevant bubbles from this browser.
+            Capture stays local. Ask Memory contacts your selected provider
+            only after it chooses relevant bubbles from this browser.
           </p>
         </div>
 

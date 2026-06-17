@@ -7,9 +7,7 @@ type ThoughtStreamProps = {
   draft: string;
   groups: BubbleGroup[];
   streamEndRef: RefObject<HTMLDivElement | null>;
-  onClear: () => void;
   onDraftChange: (value: string) => void;
-  onExport: () => void;
   onSubmit: () => void;
 };
 
@@ -18,9 +16,7 @@ export function ThoughtStream({
   draft,
   groups,
   streamEndRef,
-  onClear,
   onDraftChange,
-  onExport,
   onSubmit,
 }: ThoughtStreamProps) {
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -49,26 +45,6 @@ export function ThoughtStream({
             {bubbleCount} {bubbleCount === 1 ? "bubble" : "bubbles"} saved in
             this browser.
           </p>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <button
-            className="quiet-button compact-button"
-            aria-label="Export saved bubbles as JSON"
-            disabled={bubbleCount === 0}
-            type="button"
-            onClick={onExport}
-          >
-            Export
-          </button>
-          <button
-            className="quiet-button danger-button compact-button"
-            aria-label="Clear saved bubbles from this browser"
-            disabled={bubbleCount === 0}
-            type="button"
-            onClick={onClear}
-          >
-            Clear
-          </button>
         </div>
       </div>
 

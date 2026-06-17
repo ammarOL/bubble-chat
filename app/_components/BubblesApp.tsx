@@ -3,21 +3,43 @@
 import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { askMemory } from "../_lib/ask-memory";
 import {
+  AI_SETTINGS_STORAGE_KEY,
   BUBBLES_STORAGE_KEY,
+  DEFAULT_AI_SETTINGS,
   createBubble,
   createBubblesExport,
+  parseStoredAiSettings,
   parseStoredBubbles,
+  serializeAiSettings,
 } from "../_lib/bubble-storage";
 import { groupBubblesByDate } from "../_lib/date-format";
 import { retrieveBubbles } from "../_lib/retrieval";
-import type { AskResult, AskStatus, Bubble, RetrievedBubble } from "../_lib/types";
+import {
+  AI_PROVIDERS,
+  AI_PROVIDER_LABELS,
+  type AiProvider,
+  type AiSettings,
+  type AskResult,
+  type AskStatus,
+  type Bubble,
+  type RetrievedBubble,
+} from "../_lib/types";
 import { AskMemoryPanel } from "./AskMemoryPanel";
+import { ConfirmationDialog } from "./ConfirmationDialog";
+import { SettingsPanel } from "./SettingsPanel";
 import { ThoughtStream } from "./ThoughtStream";
 
-type AppTab = "chat" | "insights";
+type AppTab = "chat" | "insights" | "settings";
+type PendingConfirmation =
+  | { type: "clear-bubbles" }
+  | { provider: AiProvider; type: "remove-api-key" };
 
 export function BubblesApp() {
   const [activeTab, setActiveTab] = useState<AppTab>("chat");
+  const [aiSettings, setAiSettings] =
+    useState<AiSettings>(DEFAULT_AI_SETTINGS);
+  const [selectedSettingsProvider, setSelectedSettingsProvider] =
+    useState<AiProvider>("gemini");
   const [bubbles, setBubbles] = useState<Bubble[]>([]);
   const [draft, setDraft] = useState("");
   const [question, setQuestion] = useState("");
@@ -25,6 +47,8 @@ export function BubblesApp() {
   const [askResult, setAskResult] = useState<AskResult | null>(null);
   const [askStatus, setAskStatus] = useState<AskStatus>("idle");
   const [notice, setNotice] = useState("");
+  const [pendingConfirmation, setPendingConfirmation] =
+    useState<PendingConfirmation | null>(null);
   const [isReady, setIsReady] = useState(false);
   const streamEndRef = useRef<HTMLDivElement | null>(null);
 
@@ -47,6 +71,12 @@ export function BubblesApp() {
       meta: matches.length > 0 ? `${matches.length}` : "Ask",
       panelId: "insights-panel",
     },
+    {
+      id: "settings",
+      label: "Settings",
+      meta: aiSettings.provider ? "Key" : "Setup",
+      panelId: "settings-panel",
+    },
   ];
 
   useEffect(() => {
@@ -55,6 +85,11 @@ export function BubblesApp() {
         setBubbles(
           parseStoredBubbles(window.localStorage.getItem(BUBBLES_STORAGE_KEY)),
         );
+        const storedAiSettings = parseStoredAiSettings(
+          window.localStorage.getItem(AI_SETTINGS_STORAGE_KEY),
+        );
+        setAiSettings(storedAiSettings);
+        setSelectedSettingsProvider(storedAiSettings.provider || "gemini");
       } catch {
         setNotice("I could not read the saved bubbles in this browser.");
       } finally {
@@ -72,6 +107,17 @@ export function BubblesApp() {
 
     window.localStorage.setItem(BUBBLES_STORAGE_KEY, JSON.stringify(bubbles));
   }, [bubbles, isReady]);
+
+  useEffect(() => {
+    if (!isReady) {
+      return;
+    }
+
+    window.localStorage.setItem(
+      AI_SETTINGS_STORAGE_KEY,
+      serializeAiSettings(aiSettings),
+    );
+  }, [aiSettings, isReady]);
 
   useEffect(() => {
     streamEndRef.current?.scrollIntoView({ block: "end" });
@@ -115,14 +161,14 @@ export function BubblesApp() {
     setActiveTab("insights");
 
     try {
-      setAskResult(await askMemory(trimmedQuestion, nextMatches));
+      setAskResult(await askMemory(trimmedQuestion, nextMatches, aiSettings));
       setAskStatus("answered");
     } catch (error) {
       setAskStatus("error");
       setNotice(
         error instanceof Error
           ? error.message
-          : "Bubbles could not ask Gemini right now.",
+          : "Bubbles could not ask the selected provider right now.",
       );
     }
   }
@@ -146,19 +192,91 @@ export function BubblesApp() {
       return;
     }
 
-    const confirmed = window.confirm(
-      "Clear every saved bubble from this browser?",
-    );
+    setPendingConfirmation({ type: "clear-bubbles" });
+  }
 
-    if (!confirmed) {
-      return;
-    }
-
+  function confirmClearBubbles() {
     setBubbles([]);
     setMatches([]);
     setAskResult(null);
     setAskStatus("idle");
+    setPendingConfirmation(null);
     setNotice("Cleared the bubbles stored in this browser.");
+  }
+
+  function changeProvider(provider: AiProvider) {
+    setSelectedSettingsProvider(provider);
+
+    if (!aiSettings.keys[provider]?.trim()) {
+      setNotice(
+        `Save a ${AI_PROVIDER_LABELS[provider]} API key before switching to ${AI_PROVIDER_LABELS[provider]}.`,
+      );
+      return;
+    }
+
+    setAiSettings((current) => ({
+      ...current,
+      provider,
+    }));
+    setNotice(`Ask Memory will use ${AI_PROVIDER_LABELS[provider]}.`);
+  }
+
+  function saveApiKey(provider: AiProvider, apiKey: string) {
+    const trimmedApiKey = apiKey.trim();
+
+    if (!trimmedApiKey) {
+      setNotice(`Paste a ${AI_PROVIDER_LABELS[provider]} API key before saving.`);
+      return;
+    }
+
+    setAiSettings((current) => ({
+      ...current,
+      keys: {
+        ...current.keys,
+        [provider]: trimmedApiKey,
+      },
+      provider,
+    }));
+    setSelectedSettingsProvider(provider);
+    setNotice(`Saved ${AI_PROVIDER_LABELS[provider]} key in this browser.`);
+  }
+
+  function removeApiKey(provider: AiProvider) {
+    if (!aiSettings.keys[provider]?.trim()) {
+      return;
+    }
+
+    setPendingConfirmation({ provider, type: "remove-api-key" });
+  }
+
+  function confirmRemoveApiKey(provider: AiProvider) {
+    const nextKeysForSelection = { ...aiSettings.keys };
+    delete nextKeysForSelection[provider];
+    const fallbackProvider = findFirstSavedProvider(nextKeysForSelection);
+
+    setAiSettings((current) => {
+      const nextKeys = { ...current.keys };
+      delete nextKeys[provider];
+      const nextProvider =
+        current.provider === provider
+          ? findFirstSavedProvider(nextKeys)
+          : current.provider;
+
+      return {
+        ...current,
+        keys: nextKeys,
+        provider: nextProvider,
+      };
+    });
+    setSelectedSettingsProvider((current) =>
+      current === provider ? fallbackProvider || provider : current,
+    );
+    setPendingConfirmation(null);
+    setNotice(`Removed ${AI_PROVIDER_LABELS[provider]} key from this browser.`);
+  }
+
+  function cancelPendingConfirmation() {
+    setPendingConfirmation(null);
   }
 
   function selectTab(tab: AppTab) {
@@ -225,9 +343,7 @@ export function BubblesApp() {
               groups={groupedBubbles}
               streamEndRef={streamEndRef}
               bubbleCount={bubbles.length}
-              onClear={clearBubbles}
               onDraftChange={setDraft}
-              onExport={exportBubbles}
               onSubmit={addBubble}
             />
           </div>
@@ -249,8 +365,59 @@ export function BubblesApp() {
               onSubmit={handleAskMemory}
             />
           </div>
+
+          <div
+            className="tab-panel h-full"
+            id="settings-panel"
+            role="tabpanel"
+            aria-labelledby="settings-tab"
+            hidden={activeTab !== "settings"}
+          >
+            <SettingsPanel
+              bubbleCount={bubbles.length}
+              selectedProvider={selectedSettingsProvider}
+              settings={aiSettings}
+              onClear={clearBubbles}
+              onExport={exportBubbles}
+              onProviderChange={changeProvider}
+              onRemoveApiKey={removeApiKey}
+              onSaveApiKey={saveApiKey}
+            />
+          </div>
         </div>
       </div>
+      {pendingConfirmation ? (
+        <ConfirmationDialog
+          confirmLabel={
+            pendingConfirmation.type === "clear-bubbles"
+              ? "Clear bubbles"
+              : "Remove key"
+          }
+          description={
+            pendingConfirmation.type === "clear-bubbles"
+              ? "This removes every saved bubble, the current Ask Memory matches, and the current answer from this browser. Provider settings stay untouched."
+              : `This removes the saved ${AI_PROVIDER_LABELS[pendingConfirmation.provider]} key from this browser. Server fallback can still be used if it is configured.`
+          }
+          title={
+            pendingConfirmation.type === "clear-bubbles"
+              ? "Clear all saved bubbles?"
+              : "Remove this API key?"
+          }
+          onCancel={cancelPendingConfirmation}
+          onConfirm={() => {
+            if (pendingConfirmation.type === "clear-bubbles") {
+              confirmClearBubbles();
+              return;
+            }
+
+            confirmRemoveApiKey(pendingConfirmation.provider);
+          }}
+        />
+      ) : null}
     </main>
   );
+}
+
+function findFirstSavedProvider(keys: Partial<Record<AiProvider, string>>) {
+  return AI_PROVIDERS.find((provider) => keys[provider]?.trim()) ?? "";
 }

@@ -1,6 +1,29 @@
-import type { AskRequest, AskResponse, AskResult, Bubble } from "./types";
+import type {
+  AiSettings,
+  AskRequest,
+  AskResponse,
+  AskResult,
+  Bubble,
+} from "./types";
+import { AI_PROVIDER_LABELS } from "./types";
 
-export async function askMemory(question: string, matches: Bubble[]) {
+export async function askMemory(
+  question: string,
+  matches: Bubble[],
+  settings: AiSettings,
+) {
+  if (!settings.provider) {
+    throw new Error("Save an API key in Settings before asking memory.");
+  }
+
+  const apiKey = settings.keys[settings.provider]?.trim();
+
+  if (!apiKey) {
+    throw new Error(
+      `Save a ${AI_PROVIDER_LABELS[settings.provider]} API key in Settings before asking memory.`,
+    );
+  }
+
   const response = await fetch("/api/ask", {
     method: "POST",
     headers: {
@@ -8,6 +31,8 @@ export async function askMemory(question: string, matches: Bubble[]) {
     },
     body: JSON.stringify({
       question,
+      provider: settings.provider,
+      ...(apiKey ? { apiKey } : {}),
       matches: matches.map(({ id, text, createdAt }) => ({
         id,
         text,
@@ -20,12 +45,16 @@ export async function askMemory(question: string, matches: Bubble[]) {
 
   if (!response.ok || "error" in data) {
     throw new Error(
-      "error" in data ? data.error : "Bubbles could not ask Gemini right now.",
+      "error" in data
+        ? data.error
+        : "Bubbles could not ask the selected provider right now.",
     );
   }
 
   if (!isAskResult(data)) {
-    throw new Error("Gemini returned an answer Bubbles could not read.");
+    throw new Error(
+      "The selected provider returned an answer Bubbles could not read.",
+    );
   }
 
   return data;

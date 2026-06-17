@@ -1,15 +1,9 @@
 import { NextResponse } from "next/server";
-import { generateMemoryAnswer } from "./_lib/gemini";
+import { AI_PROVIDER_LABELS, type AiProvider } from "../../_lib/types";
+import { generateMemoryAnswer } from "./_lib/providers";
 import { parseAskRequest } from "./_lib/request";
 
 export async function POST(request: Request) {
-  if (!process.env.GOOGLE_API_KEY) {
-    return NextResponse.json(
-      { error: "GOOGLE_API_KEY is missing on the server." },
-      { status: 503 },
-    );
-  }
-
   let askRequest: ReturnType<typeof parseAskRequest>;
 
   try {
@@ -27,7 +21,21 @@ export async function POST(request: Request) {
   }
 
   try {
-    const answer = await generateMemoryAnswer(askRequest);
+    const apiKey = getProviderApiKey(askRequest.provider, askRequest.apiKey);
+
+    if (!apiKey) {
+      return NextResponse.json(
+        {
+          error: `${AI_PROVIDER_LABELS[askRequest.provider]} needs an API key. Add one in Settings or configure ${getProviderEnvKey(askRequest.provider)} on the server.`,
+        },
+        { status: 503 },
+      );
+    }
+
+    const answer = await generateMemoryAnswer({
+      ...askRequest,
+      apiKey,
+    });
 
     return NextResponse.json({
       answer,
@@ -39,9 +47,35 @@ export async function POST(request: Request) {
         error:
           error instanceof Error
             ? error.message
-            : "Bubbles could not reach Gemini right now.",
+            : "Bubbles could not reach the selected provider right now.",
       },
       { status: 502 },
     );
+  }
+}
+
+function getProviderApiKey(provider: AiProvider, requestApiKey?: string) {
+  if (requestApiKey?.trim()) {
+    return requestApiKey.trim();
+  }
+
+  switch (provider) {
+    case "openai":
+      return process.env.OPENAI_API_KEY?.trim() ?? "";
+    case "groq":
+      return process.env.GROQ_API_KEY?.trim() ?? "";
+    case "gemini":
+      return process.env.GOOGLE_API_KEY?.trim() ?? "";
+  }
+}
+
+function getProviderEnvKey(provider: AiProvider) {
+  switch (provider) {
+    case "openai":
+      return "OPENAI_API_KEY";
+    case "groq":
+      return "GROQ_API_KEY";
+    case "gemini":
+      return "GOOGLE_API_KEY";
   }
 }
